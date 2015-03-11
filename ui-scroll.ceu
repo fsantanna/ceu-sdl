@@ -6,6 +6,9 @@
 
 input void SDL_REDRAW;
 input _SDL_MouseButtonEvent* SDL_MOUSEBUTTONDOWN;
+input _SDL_TouchFingerEvent* SDL_FINGERDOWN;
+input _SDL_TouchFingerEvent* SDL_FINGERUP;
+input _SDL_TouchFingerEvent* SDL_FINGERMOTION;
 
 class UIScroll with
     interface UI;
@@ -50,72 +53,105 @@ do
 
     event void go_x,        go_y;
     var   bool go_x?=false, go_y?=false;
-
+    
     par do
         loop do
-            var _SDL_MouseButtonEvent* but = await SDL_MOUSEBUTTONDOWN;
-
             var _SDL_Point pt1, pt2;
+            var bool touch?;
+            
+            par/or do
+                var _SDL_MouseButtonEvent* but = await SDL_MOUSEBUTTONDOWN;
                 pt1.x = but:x;
                 pt1.y = but:y;
+                touch? = false;
+            with
+                var _SDL_TouchFingerEvent* touch = await SDL_FINGERDOWN;
+                pt1.x = touch:x;
+                pt1.y = touch:y;
+                touch? = true;
+            end
 
-            every 50ms do
-                var int s = _SDL_GetMouseState(&pt2.x, &pt2.y);
-                if not s then
-                    break;
+            event void new_position;
+
+            par/or do
+                await SDL_FINGERUP;
+            with
+                if touch? then
+                    loop do
+                        var _SDL_TouchFingerEvent* touch = await SDL_FINGERMOTION;
+                        pt2.x = touch:x;
+                        pt2.y = touch:y;
+                        emit new_position;
+                    end
+                else
+                    every 50ms do
+                        var int s = _SDL_GetMouseState(&pt2.x, &pt2.y);
+                        if s then
+                            emit new_position;
+                        else
+                            break;
+                        end
+                    end
                 end
-                pt1.x = pt2.x - pt1.x;
-                pt1.y = pt2.y - pt1.y;
-
-                // LIMITS
-                if ui.rect.w > rect.w then
-                    if pt1.x > 0 then
-                        var int max_x  = rect.x;
-                        var int max_dx = max_x - ui.rect.x;
-                            if pt1.x > max_dx then
-                                pt1.x = max_dx;
+            with
+                loop do
+                    await new_position;
+                    pt1.x = pt2.x - pt1.x;
+                    pt1.y = pt2.y - pt1.y;
+    
+                    var int px = pt1.x;
+                    var int py = pt1.y;
+        
+                    // LIMITS
+                    if ui.rect.w > rect.w then
+                        if pt1.x > 0 then
+                            var int max_x  = rect.x;
+                            var int max_dx = max_x - ui.rect.x;
+                                if pt1.x > max_dx then
+                                    pt1.x = max_dx;
+                                end
+                        else/if pt1.x < 0 then
+                            var int min_x  = rect.x - (ui.rect.w-rect.w);
+                            var int min_dx = min_x - ui.rect.x;
+                            if pt1.x < min_dx then
+                                pt1.x = min_dx;
                             end
-                    else/if pt1.x < 0 then
-                        var int min_x  = rect.x - (ui.rect.w-rect.w);
-                        var int min_dx = min_x - ui.rect.x;
-                        if pt1.x < min_dx then
-                            pt1.x = min_dx;
                         end
+                        emit go_x;
+                    else
+                        pt1.x = 0;
                     end
-                    emit go_x;
-                else
-                    pt1.x = 0;
-                end
-
-                if ui.rect.h > rect.h then
-                    if pt1.y > 0 then
-                        var int max_y  = rect.y;
-                        var int max_dy = max_y - ui.rect.y;
-                        if pt1.y > max_dy then
-                            pt1.y = max_dy;
+    
+                    if ui.rect.h > rect.h then
+                        if pt1.y > 0 then
+                            var int max_y  = rect.y;
+                            var int max_dy = max_y - ui.rect.y;
+                            if pt1.y > max_dy then
+                                pt1.y = max_dy;
+                            end
+                        else/if pt1.y < 0 then
+                            var int min_y  = rect.y - (ui.rect.h-rect.h);
+                            var int min_dy = min_y - ui.rect.y;
+                            if pt1.y < min_dy then
+                                pt1.y = min_dy;
+                            end
                         end
-                    else/if pt1.y < 0 then
-                        var int min_y  = rect.y - (ui.rect.h-rect.h);
-                        var int min_dy = min_y - ui.rect.y;
-                        if pt1.y < min_dy then
-                            pt1.y = min_dy;
-                        end
+                        emit go_y;
+                    else
+                        pt1.y = 0;
                     end
-                    emit go_y;
-                else
-                    pt1.y = 0;
+    
+                    if pt1.x!=0 or pt1.y!=0 then
+                        ui.rect.x = ui.rect.x + pt1.x;
+                        ui.rect.y = ui.rect.y + pt1.y;
+                        call/rec ui.go(null);
+                    end
+    
+                    //ui.rect.x = ui.rect.x + pt1.x;
+                    //ui.rect.y = ui.rect.y + pt1.y;
+    
+                    pt1 = pt2;
                 end
-
-                if pt1.x!=0 or pt1.y!=0 then
-                    ui.rect.x = ui.rect.x + pt1.x;
-                    ui.rect.y = ui.rect.y + pt1.y;
-                    call/rec ui.go(null);
-                end
-
-                //ui.rect.x = ui.rect.x + pt1.x;
-                //ui.rect.y = ui.rect.y + pt1.y;
-
-                pt1 = pt2;
             end
         end
     with
@@ -266,8 +302,9 @@ with
             _fprintf(_stderr, "G: %d\n", opt);
         end
     with
-        await 10s;
-        _printf("oi\n");
+        _printf("scrolling will enable in 5 seconds...\n");
+        await 5s;
+        _printf("scrolling now enabled!\n");
 
         var _SDL_Color c = _colors.blue;
             c.a = 0x77;

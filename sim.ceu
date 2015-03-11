@@ -12,6 +12,7 @@ input _SDL_KeyboardEvent* SDL_KEYDOWN, SDL_KEYDOWN_;
 input _SDL_KeyboardEvent* SDL_KEYUP,   SDL_KEYUP_;
 input _SDL_MouseButtonEvent* SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONDOWN_;
 input _SDL_MouseMotionEvent* SDL_MOUSEMOTION, SDL_MOUSEMOTION_;
+input _SDL_TouchFingerEvent* SDL_FINGERMOTION, SDL_FINGERMOTION_;
 
 #include "c.ceu"
 #include "sdl.ceu"
@@ -97,6 +98,12 @@ do
                         _queue_put(_CEU_IN_SDL_MOUSEMOTION, _CEU_EVTP(null),
                                    sizeof(_SDL_MouseMotionEvent), (byte*)mse);
                     end
+                with
+                    var _SDL_TouchFingerEvent* tfe;
+                    every tfe in SDL_FINGERMOTION do
+                        _queue_put(_CEU_IN_SDL_FINGERMOTION, _CEU_EVTP(null),
+                                   sizeof(_SDL_TouchFingerEvent), (byte*)tfe);
+                    end
                 end
             end
             await this.go_off;
@@ -119,6 +126,10 @@ do
             else/if qu:evt == _CEU_IN_SDL_MOUSEMOTION then
                 async(qu) do
                     emit SDL_MOUSEMOTION => qu:param.ptr;
+                end
+            else/if qu:evt == _CEU_IN_SDL_FINGERMOTION then
+                async(qu) do
+                    emit SDL_FINGERMOTION => qu:param.ptr;
                 end
             else
                 _assert(0);

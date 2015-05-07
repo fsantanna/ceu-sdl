@@ -6,28 +6,28 @@ all:
 	#gcc main.c $(CFLAGS) -lSDL2
 	gcc -g -Os main.c $(CFLAGS) -lpthread -lm \
 		-lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2_ttf -lSDL2_net -lSDL2_gfx \
-		-o $(basename $(CEUFILE)).exe
+		-o $(basename $(CEUFILE)).out
 
 sim:
 	ceu --timemachine --cpp-args "-I . -DCEUFILE=$(CEUFILE)" sim.ceu
 	#gcc main.c $(CFLAGS) -lSDL2
 	gcc -g -Os -DCEU_TIMEMACHINE $(CFLAGS) main.c -lpthread -lm \
 		-lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2_ttf -lSDL2_net -lSDL2_gfx \
-		-o $(basename $(CEUFILE)).exe
+		-o $(basename $(CEUFILE)).out
 
 sim-tst:
 	ceu ---timemachine -cpp-args "-I . -DCEU_TIMEMACHINE" sim-tst.ceu
 	#gcc main.c $(CFLAGS) -lSDL2
 	gcc -g -Os -DCEU_TIMEMACHINE $(CFLAGS) main.c -lpthread -lm \
 		-lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2_ttf -lSDL2_net -lSDL2_gfx \
-		-o sim-tst.exe
+		-o sim-tst.out
 
 demo:
 	ceu --cpp-args "-I . -DALL" samples/all.ceu
 	#gcc main.c $(CFLAGS) -lSDL2
 	gcc -g -Os main.c -DALL $(CFLAGS) -lpthread -lm \
 		-lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2_ttf -lSDL2_net -lSDL2_gfx \
-		-o samples/all.exe
+		-o samples/all.out
 
 ui-scroll:
 	ceu --cpp-args "-D __UI_SCROLL_CEU" ui-scroll.ceu
@@ -42,7 +42,7 @@ ui-texture:
 	gcc main.c $(CFLAGS) -lSDL2 -lSDL2_image -lSDL2_gfx -lSDL2_ttf -lm
 
 clean:
-	find . -name "*.exe"  | xargs rm -f
+	find . -name "*.out"  | xargs rm -f
 	find . -name "_ceu_*" | xargs rm -f
 
 .PHONY: all clean

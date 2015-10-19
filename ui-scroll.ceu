@@ -48,7 +48,7 @@ do
 
     /* BODY */
 
-    event void go_x,        go_y;
+    event void go_x, go_y, new_position;
     var   bool should_go_x=false, should_go_y=false;
 
     par do
@@ -68,50 +68,24 @@ do
                 is_touch = true;
             end
 
-            loop do
-                await 50ms;
-                var int s = _SDL_GetMouseState(&&pt2.x, &&pt2.y);
-                if not s then
-                    break;
-                end
-                pt1.x = pt2.x - pt1.x;
-                pt1.y = pt2.y - pt1.y;
-
-                // LIMITS
-                if ui.rect.w > rect.w then
-                    if pt1.x > 0 then
-                        var int max_x  = rect.x;
-                        var int max_dx = max_x - ui.rect.x;
-                            if pt1.x > max_dx then
-                                pt1.x = max_dx;
-                            end
-                    else/if pt1.x < 0 then
-                        var int min_x  = rect.x - (ui.rect.w-rect.w);
-                        var int min_dx = min_x - ui.rect.x;
-                        if pt1.x < min_dx then
-                            pt1.x = min_dx;
-                        end
+            par/or do
+                await SDL_FINGERUP;
+            with
+                if is_touch then
+                    loop do
+                        var _SDL_TouchFingerEvent&& touch = await SDL_FINGERMOTION;
+                        pt2.x = touch:x;
+                        pt2.y = touch:y;
+                        emit new_position;
                     end
                 else
-                    par/or do
-                        await SDL_FINGERUP;
-                    with
-                        if is_touch then
-                            loop do
-                                var _SDL_TouchFingerEvent* touch = await SDL_FINGERMOTION;
-                                pt2.x = touch:x;
-                                pt2.y = touch:y;
-                                emit new_position;
-                            end
+                    loop do
+                        await 50ms;
+                        var int s = _SDL_GetMouseState(&&pt2.x, &&pt2.y);
+                        if s then
+                            emit new_position;
                         else
-                            every 50ms do
-                                var int s = _SDL_GetMouseState(&pt2.x, &pt2.y);
-                                if s then
-                                    emit new_position;
-                                else
-                                    break;
-                                end
-                            end
+                            break;
                         end
                     end
                 end
@@ -312,9 +286,12 @@ with
             _fprintf(_stderr, "G: %d\n", opt);
         end
     with
+        /*
         _printf("scrolling will enable in 5 seconds...\n");
         await 5s;
         _printf("scrolling now enabled!\n");
+        */
+        _printf("started!\n");
 
         var SDL_Color c = SDL_COLOR_BLUE;
             c.a = 0x77;

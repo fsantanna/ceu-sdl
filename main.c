@@ -12,7 +12,9 @@ int CEU_TIMEMACHINE_ON = 0;
 #define CEU_TIMEMACHINE_ON 0
 #endif
 
+#ifndef SIMULATION_TEST
 #define CEU_FPS 50
+#endif
 
 // definitely lost: 2,478 bytes in 17 blocks
 
@@ -40,6 +42,26 @@ int CEU_TIMEMACHINE_ON = 0;
 
 #include <assert.h>
 
+#define ceu_out_assert(v) ceu_sys_assert(v)
+void ceu_sys_assert (int v) {
+    assert(v);
+}
+
+#define ceu_out_log(m,s) ceu_sys_log(m,s)
+void ceu_sys_log (int mode, long s) {
+    switch (mode) {
+        case 0:
+            printf("%s", (char*)s);
+            break;
+        case 1:
+            printf("%lX", s);
+            break;
+        case 2:
+            printf("%ld", s);
+            break;
+    }
+}
+
 #include "_ceu_app.h"
 
 s32 WCLOCK_nxt;
@@ -63,22 +85,26 @@ int main (int argc, char *argv[])
 
     WCLOCK_nxt = CEU_WCLOCK_INACTIVE;
     u32 old = SDL_GetTicks();
-    u32 fps_old = old;
-
-#ifdef CEU_THREADS
-    // just before executing CEU code
-    CEU_THREADS_MUTEX_LOCK(&CEU.threads_mutex);
+#ifdef CEU_FPS
+    int fps_next = (1000/CEU_FPS);
 #endif
 
     tceu_app app;
         app.data = (tceu_org*) &CEU_DATA;
         app.init = &ceu_app_init;
 
+#ifdef CEU_THREADS
+    // just before executing CEU code
+    CEU_THREADS_MUTEX_LOCK(&app.threads_mutex);
+#endif
+
     app.init(&app);    /* calls CEU_THREADS_MUTEX_LOCK() */
 #ifdef CEU_RET
     if (! app.isAlive)
         goto END;
 #endif
+
+#ifndef SIMULATION_TEST
 
 #ifdef CEU_IN_OS_START_
     ceu_sys_go(&app, CEU_IN_OS_START_, NULL);
@@ -114,6 +140,8 @@ if (!CEU_TIMEMACHINE_ON) {
 }
 #endif
 
+#endif  /* SIMULATION_TEST */
+
     SDL_Event evt;
 #ifdef __ANDROID__
     int isPaused = 0;
@@ -123,20 +151,23 @@ if (!CEU_TIMEMACHINE_ON) {
     {
 #ifdef CEU_THREADS
         // unlock from INIT->START->REDRAW or last loop iteration
-        CEU_THREADS_MUTEX_UNLOCK(&CEU.threads_mutex);
+        CEU_THREADS_MUTEX_UNLOCK(&app.threads_mutex);
 #endif
 
         /*
          * With    SDL_DT, 'tm=0' (update as fast as possible).
          * Without SDL_DT, 'tm=?' respects the timers.
          */
-#if defined(CEU_IN_SDL_DT) || defined(CEU_IN_SDL_DT_)
+#if defined(CEU_IN_SDL_DT) || defined(CEU_IN_SDL_DT_) || defined(CEU_FPS)
+
 #ifdef CEU_FPS
-        s32 tm = (CEU_TIMEMACHINE_ON ? 0 : (1000/CEU_FPS));
+        s32 tm = (CEU_TIMEMACHINE_ON ? 0 : fps_next);
 #else
         s32 tm = 0;     // as fast as possible
 #endif
-#else
+
+#else /* !(defined(CEU_IN_SDL_DT) || defined(CEU_IN_SDL_DT_) || defined(CEU_FPS)) */
+
         s32 tm = -1;
 #ifdef CEU_WCLOCKS
         if (WCLOCK_nxt != CEU_WCLOCK_INACTIVE)
@@ -147,7 +178,8 @@ if (!CEU_TIMEMACHINE_ON) {
             tm = 0;
         }
 #endif
-#endif  // CEU_IN_SDL_DT
+
+#endif /* defined(CEU_IN_SDL_DT) || defined(CEU_IN_SDL_DT_) || defined(CEU_FPS) */
 
         //SDL_EventState(SDL_FINGERMOTION, SDL_IGNORE);
 
@@ -161,37 +193,38 @@ if (!CEU_TIMEMACHINE_ON) {
             has = SDL_WaitEventTimeout(&evt, tm);
         }
 
-/* TODO: o 1o faz mais sentido, mas so o 2o funciona! */
-/*
+#ifndef SIMULATION_TEST
+
         u32 now = SDL_GetTicks();
-        while (now <= old) {
-            now = SDL_GetTicks();
-        }
-        s32 dt = now - old;
-        old = now;
-*/
-        u32 now = SDL_GetTicks();
-        s32 dt_ms = now - old;
-        s32 dt_us = dt_ms*1000;
+        s32 dt_ms = (now - old);
         assert(dt_ms >= 0);
         old = now;
 
-
-        // DT/WCLOCK/REDRAW respecting FPS (at most)
-        int fps_ok = 1;
-/*
-        int fps_ok = !SDL_PollEvent(NULL);
-        if (! fps_ok) {
-            if (old >= fps_old+1000/CEU_FPS) {
-                fps_old = old;
-                fps_ok = 1;
+#ifdef CEU_FPS
+        /* force dt_ms=(1000/CEU_FPS) */
+        int fps_ok = 0;
+        int togo = (fps_next - dt_ms);
+        if (togo <= 0) {
+            fps_ok = 1;
+            dt_ms = (1000/CEU_FPS);
+            fps_next = (dt_ms + togo);
+            if (fps_next < 0) {
+/*printf("[TODO: main.c] delayed %d\n", -fps_next);*/
+                fps_next = 0;
             }
+        } else {
+            fps_next = togo;
         }
-*/
+        assert(fps_next >= 0);
+#else
+        int fps_ok = 1;
+#endif
+
+        s32 dt_us = dt_ms*1000;
 
 #ifdef CEU_THREADS
         // just before executing CEU code
-        CEU_THREADS_MUTEX_LOCK(&CEU.threads_mutex);
+        CEU_THREADS_MUTEX_LOCK(&app.threads_mutex);
 #endif
 
 #ifdef __ANDROID__
@@ -447,6 +480,8 @@ if (!CEU_TIMEMACHINE_ON) {
 }
 #endif
 
+#endif  /* SIMULATION_TEST */
+
 /* TODO: "_" events */
 #ifdef CEU_ASYNCS
         if (app.pendingAsyncs) {
@@ -461,7 +496,7 @@ if (!CEU_TIMEMACHINE_ON) {
 END:
 #ifdef CEU_THREADS
     // only reachable if LOCKED
-    CEU_THREADS_MUTEX_UNLOCK(&CEU.threads_mutex);
+    CEU_THREADS_MUTEX_UNLOCK(&app.threads_mutex);
 #endif
     SDL_Quit();         // TODO: slow
 #ifdef CEU_RET

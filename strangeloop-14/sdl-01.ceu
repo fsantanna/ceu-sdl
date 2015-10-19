@@ -1,29 +1,5 @@
-#ifndef ALL
-
-#include "sdl.ceu";
-
-input void SDL_QUIT;
-input void SDL_REDRAW;
-
-var _SDL_Window[] win;
-finalize
-    win = _SDL_CreateWindow("SDL - 01 (one)", 200,200, 640,480, 0);
-with
-    _SDL_DestroyWindow(win);
-end
-
-var _SDL_Renderer[] ren;
-finalize
-    ren = _SDL_CreateRenderer(win, -1, 0);
-with
-    _SDL_DestroyRenderer(ren);
-end
-
-#else
-
-_SDL_SetWindowTitle(win, "SDL - 01 (one)");
-
-#endif
+#define HEADER_TITLE "SDL - 01 (one)"
+#include "header.ceu"
 
 var _SDL_Rect r;
     r.x = 100;
@@ -37,11 +13,11 @@ par/or do
     end
 with
     every SDL_REDRAW do
-        _SDL_SetRenderDrawColor(ren, 0x00,0x00,0x00, 0);
-        _SDL_RenderFillRect(ren, null);
-        _SDL_SetRenderDrawColor(ren, 0xFF,0xFF,0xFF,0);
-        _SDL_RenderFillRect(ren, &r);
-        _SDL_RenderPresent(ren);
+        _SDL_SetRenderDrawColor(_REN, 0x00,0x00,0x00, 0xFF);
+        _SDL_RenderFillRect(_REN, null);
+        _SDL_SetRenderDrawColor(_REN, 0xFF,0xFF,0xFF,0xFF);
+        _SDL_RenderFillRect(_REN, &r);
+        _SDL_RenderPresent(_REN);
     end
 with
     await SDL_QUIT;
